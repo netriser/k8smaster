@@ -6,14 +6,13 @@
     state: present
 
 - name: Add Kernel Modules
-  ansible.builtin.shell: {{ item }}
-  loop:
-    - modprobe br_netfilter
-    - modprobe ip_vs
-    - modprobe ip_vs_rr
-    - modprobe ip_vs_wrr
-    - modprobe ip_vs_sh
-    - modprobe overlay
+  ansible.builtin.shell: |
+    modprobe br_netfilter
+    modprobe ip_vs
+    modprobe ip_vs_rr
+    modprobe ip_vs_wrr
+    modprobe ip_vs_sh
+    modprobe overlay
   changed_when: false
 
 - name: Copy kubernets configuration module file
