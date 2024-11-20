@@ -1,0 +1,129 @@
+---
+# tasks file for base
+- name: Install base packages
+  ansible.builtin.yum:
+    name: "kernel-devel-{{ansible_distribution_version}}"
+    state: present
+
+- name: Add Kernel Modules
+  ansible.builtin.shell: {{ item }}
+  loop:
+    - modprobe br_netfilter
+    - modprobe ip_vs
+    - modprobe ip_vs_rr
+    - modprobe ip_vs_wrr
+    - modprobe ip_vs_sh
+    - modprobe overlay
+  changed_when: false
+
+- name: Copy kubernets configuration module file
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: 0644
+  loop:
+    - { src: "kubernetes_module.conf", dest: "/etc/modules-load.d/kubernetes.conf" }
+    - { src: "kubernetes_sysctl.conf", dest: "/etc/sysctl.d/kubernetes.conf" }
+
+- name: Enable Kernel Modules
+  ansible.builtin.shell: "{{ item}}"
+  loop:
+    - sysctl --system
+    - swapoff -a
+  changed_when: false
+
+- name: Modify fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^swap'
+    line: '#swap'
+
+- name: Install containerd
+  ansible.builtin.yum:
+    name: containerd
+    state: present
+
+- name: Enable and start containerd
+  ansible.builtin.systemd:
+    name: containerd
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: configure containerd
+  ansible.builtin.shell: "containerd config default > /etc/containerd/config.toml"
+  changed_when: false
+
+- name: configure configuration containerd file
+  ansible.builtin.lineinfile:
+    path: /etc/containerd/config.toml
+    regexp: "SystemdCgroup = false"
+    line: "SystemdCgroup = true"
+  notify:
+    - Restart Containerd
+
+- name: Add kubernetes repository
+  ansible.builtin.yum_repository:
+    name: kubernetes
+    description: Kubernetes repository
+    baseurl: "https://pkgs.k8s.io/core:/stable:/{{ kubernetes_version }}/rpm/"
+    gpgcheck: true
+    exclude: kubelet kubeadm kubectl cri-tools kubernetes-cni
+    repo_gpgcheck: false
+    sslverify: true
+    sslcacert: /etc/pki/tls/certs/ca-bundle.crt
+    metadata_expire: 300s
+
+- name: Install kubernetes
+  ansible.builtin.yum:
+    name: kubelet,kubeadm,kubectl
+    state: present
+
+- name: Enable and start kubelet
+  ansible.builtin.systemd:
+    name: kubelet
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Initialise kubernetes cluster
+  ansible.builtin.shell: "kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address={{ ansible_default_ipv4.address }} --ignore-preflight-errors=NumCPU,Mem"
+  register: kubeadm_init
+  changed_when: false
+
+- name: Create .kube directory
+  ansible.builtin.file:
+    path: "{{ ansible_env.HOME }}/.kube"
+    state: directory
+    mode: 0755
+
+- name: Copy kubernetes configuration file
+  ansible.builtin.copy:
+    src: "/etc/kubernetes/admin.conf"
+    dest: "{{ ansible_env.HOME }}/.kube/config"
+    owner: "{{ ansible_env.USER }}"
+    group: "{{ ansible_env.USER }}"
+    mode: 0644
+
+- name: Deploy the Tigera Operator
+  ansible.builtin.shell: "kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/tigera-operator.yaml"
+  changed_when: false
+
+- name: Download calico manifest"
+  ansible.builtin.get_url:
+    url: "https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/custom-resources.yaml"
+    dest: "/tmp/custom-resources.yaml"
+    mode: '0644'
+
+- name: modify IPadress in calico manifest
+  ansible.builtin.lineinfile:
+    path: "/tmp/custom-resources.yaml"
+    regexp: "192.168.0.0/16"
+    line: "10.244.0.0/16"
+
+- name: Deploy calico manifest
+  ansible.builtin.shell: "kubectl create -f /tmp/custom-resources.yaml"
+  changed_when: false
+  
