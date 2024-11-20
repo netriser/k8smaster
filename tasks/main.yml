@@ -1,9 +1,9 @@
 ---
-# tasks file for base
-- name: Install base packages
-  ansible.builtin.yum:
-    name: "kernel-devel"
-    state: present
+# # tasks file for base
+# - name: Install base packages
+#   ansible.builtin.apt:
+#     name: "kernel-devel"
+#     state: present
 
 - name: Add Kernel Modules
   ansible.builtin.shell: |
@@ -40,7 +40,7 @@
     line: '#swap'
 
 - name: Install containerd
-  ansible.builtin.yum:
+  ansible.builtin.apt:
     name: containerd
     state: present
 
@@ -52,7 +52,9 @@
     daemon_reload: true
 
 - name: configure containerd
-  ansible.builtin.shell: "containerd config default > /etc/containerd/config.toml"
+  ansible.builtin.shell: |
+    mkdir /etc/containerd
+    containerd config default > /etc/containerd/config.toml"
   changed_when: false
 
 - name: configure configuration containerd file
@@ -64,7 +66,7 @@
     - Restart Containerd
 
 - name: Add kubernetes repository
-  ansible.builtin.yum_repository:
+  ansible.builtin.apt_repository:
     name: kubernetes
     description: Kubernetes repository
     baseurl: "https://pkgs.k8s.io/core:/stable:/{{ kubernetes_version }}/rpm/"
@@ -76,7 +78,7 @@
     metadata_expire: 300s
 
 - name: Install kubernetes
-  ansible.builtin.yum:
+  ansible.builtin.apt:
     name: kubelet,kubeadm,kubectl
     state: present
 

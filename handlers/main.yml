@@ -1,2 +1,7 @@
 ---
 # handlers file for k8s
+- name: Restart Containerd
+  ansible.builtin.service:
+    name: containerd
+    state: restarted
+    enabled: true
