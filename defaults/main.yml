@@ -1,3 +1,13 @@
 ---
 # defaults file for k8s
 kubernetes_version: "v1.28"
+kubernetes_cidr_pods: "10.200.0.0/16"
+kubeadm_master_group_name: "k8s-master"
+kubeadm_worker_group_name: "k8s-worker"
+kubernetes_prerequisites_packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg2
+  - lsb-release
+  - bridge-utils
